@@ -4,6 +4,8 @@
 import os
 import random
 import time
+import gevent
+from gevent import monkey
 
 from image_editor import ImageEditor
 
@@ -114,22 +116,42 @@ class ImageProcessor:
             finally:
                 delete_file(target_file_path)
 
+    def process_image(self, messages, bw_image_processor, brighten_image_processor):
+        for image_key in messages:
+            image_name = self._get_name_from_key(image_key)
+            print("Image name: " + image_name)
+            image_name_without_file_suffix = image_name.split(".")[-2]
+            image_file_suffix = image_name.split(".")[-1]
+            temp_image_path = image_name_without_file_suffix + "-" + str(random.randrange(100000))
+            self._download_image(image_key, temp_image_path + "." + image_file_suffix)
+            bw_image_processor.monochrome_and_upload(temp_image_path + "." + image_file_suffix)
+            brighten_image_processor.brighten_and_upload(temp_image_path + "." + image_file_suffix)
+            delete_file(temp_image_path + "." + image_file_suffix)
+
+    def concurrent_processing(self, messages, bw_image_processor, brighten_image_processor):
+        greenlets = []
+        number_of_greenlets = 2
+
+        # Calculate the number of messages per greenlet
+        messages_per_greenlet = len(messages) // number_of_greenlets
+
+        for i in range(number_of_greenlets):
+            start_idx = i * messages_per_greenlet
+            end_idx = start_idx + messages_per_greenlet
+            sub_messages = messages[start_idx:end_idx]
+
+            greenlets.append(gevent.spawn(self.process_image, sub_messages, bw_image_processor, brighten_image_processor))
+
+        gevent.joinall(greenlets)
+
     def run(self):
         try:
             messages = self._extract_tasks()
             if len(messages) == 0:
                 return
-
-            for image_key in messages:
-                image_name = self._get_name_from_key(image_key)
-                print("Image name: " + image_name)
-                image_name_without_file_suffix = image_name.split(".")[-2]
-                image_file_suffix = image_name.split(".")[-1]
-                temp_image_path = image_name_without_file_suffix + "-" + str(random.randrange(100000))
-                self._download_image(image_key, temp_image_path + "." + image_file_suffix)
-                self.bw_image_processor.monochrome_and_upload(temp_image_path + "." + image_file_suffix)
-                self.brighten_image_processor.brighten_and_upload(temp_image_path + "." + image_file_suffix)
-                delete_file(temp_image_path + "." + image_file_suffix)
+            
+            # Call concurrent_processing function
+            self.concurrent_processing(messages, self.bw_image_processor, self.brighten_image_processor)
         except Exception as e:
             print("Failed to process message from SQS queue...")
             print(e)
