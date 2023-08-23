@@ -12,35 +12,16 @@ Here's a sample code you can run in a Python Lambda in your account. You can fol
 First step is to create the resources needed to run the application.
 
 * Go to the S3 console, create an S3 bucket and take a note of the name.
-    * Example of the name: profiler-python-recommendations-demo-your-name-here
-
-* Create a IAM role with these permissions to be used by the Lambda application
-    * Choose service `Lambda` to allow our lambda functions to call AWS services on your behalf.
-    * Choose managed policy `AWSLambdaBasicExecutionRole`.
-    * Create an inline policy and name it `profiler-python-recommendations-demo-policy`.
-```
-    {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "VisualEditor0",
-                "Effect": "Allow",
-                "Action": [
-                    "s3:PutObject",
-                    "cloudwatch:PutMetricData"
-                ],
-                "Resource": "*"
-            }
-        ]
-    }
-```
-*
-    * Name the role `profiler-python-recommendations-demo-role` and attache the policy created above with that role.
+    * Name it as: `python-lambda-imageprocessor-demo-app-test-bucket-your-name-here` for example `python-lambda-imageprocessor-demo-app-test-bucket-original`
+    * Upload the image `example-image.png` into the bucket
+* Create an SQS queue, e.g. `DemoApplicationQueueLambdaOriginal`.
 * Create a Lambda Function with the following configuration:
-    * Name: `profiler-python-recommendations-demo`.
+    * Name: `python-lambda-imageprocessor-demo-app`.
     * Runtime: **Python 3.8**.
     * Change the default execution role to the newly created one.
-    * Add environment variable `S3_BUCKET` with the value of the bucket name that was just created.
+    * Got to `Configuration->Environment Variables` -
+        * Add environment variable `DEMO_APP_BUCKET_NAME` with the value of the bucket name that was just created.
+        * Add another environment variable `DEMO_APP_SQS_URL` with value as `https://sqs.$REGION.amazonaws.com/$ACCOUNT_ID/$QUEUE_NAME`. Replace the `$REGION`, `$ACCOUNT_ID` with appropriate values and `$QUEUE_NAME` with the above created queue name.
     * Update timeout to **10** seconds.
 * Copy-paste the code from this repository from `lambda_function.py` in the `lambda_function.py` file directly in the Lambda console in the Code tab.
 
@@ -54,8 +35,8 @@ Now, let’s run the application in the Lambda console.
 * Configure it to run every 1 minute.
     * Click “Add trigger”.
     * Choose EventBridge (Cloudwatch Events).
-    * Create a new rule named “profiler-python-recommendations-demo-rule”.
-    * Set schedule expression to “rate(1 minute)”.
+    * Create a new rule named `python-lambda-imageprocessor-demo-app-rule`.
+    * Choose Rule type as `Schedule expression` and set it to `rate(1 minute)`.
     * Click “Add”.
 * You can check now the Monitor tab to see the CloudWatch metrics about invocations, duration, success and others.
 * You can also go to the Cloudwatch console and see the metrics the application is publishing in the customer namespace as part of the code.

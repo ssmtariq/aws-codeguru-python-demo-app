@@ -8,6 +8,8 @@ from skimage import io, exposure
 from skimage import img_as_ubyte
 from skimage.color import rgb2gray, rgba2rgb
 
+DEMO_APP_SQS_URL = os.environ['DEMO_APP_SQS_URL'] # "https://sqs.REGION.amazonaws.com/ACCOUNT_ID/DemoApplicationQueueLambdaOriginal"
+DEMO_APP_BUCKET_NAME = os.environ['DEMO_APP_BUCKET_NAME'] #"python-lambda-imageprocessor-demo-app-test-bucket-original"
 
 BW_FOLDER = "bw-images/"
 BRIGHTEN_FOLDER = "brighten-images/"
@@ -202,8 +204,7 @@ class TaskPublisher:
     def publish_image_transform_task(self, num_of_tasks=10):
         images = self._list_image_on_s3()
         if len(images) == 0:
-            print("No images in bucket. Uploading example image...")
-            self._upload_images_onto_s3()
+            print("No images in bucket.")
             return
 
         print("Start publishing task onto sqs...")
@@ -214,32 +215,46 @@ class TaskPublisher:
 
 class SampleDemoApp:
     def __init__(self):
-        self.sqs_queue_url = _get_environment_variable(
-            key="DEMO_APP_SQS_URL", example_value="https://sqs.eu-west-2.amazonaws.com/123456789000/ImageQueue")
-        self.s3_bucket_name = _get_environment_variable(
-            key="DEMO_APP_BUCKET_NAME", example_value="test-images-for-my-demo-app")
+        self.sqs_queue_url = DEMO_APP_SQS_URL
+        self.s3_bucket_name = DEMO_APP_BUCKET_NAME
         self.task_publisher = TaskPublisher(self.sqs_queue_url, self.s3_bucket_name)
         self.image_processor = ImageProcessor(self.sqs_queue_url, self.s3_bucket_name)
 
     def _publish_task(self):
+        self.stop_processing = False
+        start_time = time.time()  # Start time of the task_publisher thread
         """
         Setup a thread to publish 10 image transform task every 10 seconds
         """
-        while True:
+        while not self.stop_processing:
             task_thread = threading.Thread(target=self.task_publisher.publish_image_transform_task,
                                            name="task-publisher")
             task_thread.start()
             task_thread.join()
             time.sleep(10)
 
+            # Check if 14 minutes have passed
+            elapsed_time = time.time() - start_time
+            if elapsed_time >= 840:
+                self.stop_processing = True  # Set the flag to stop processing
+                break  # Exit the loop to stop processing immediately
+
     def _process_message(self):
+        self.stop_processing = False
+        start_time = time.time()  # Start time of the image_processor thread
         """
         Setup a thread to process message
         """
-        while True:
+        while not self.stop_processing:
             task_thread = threading.Thread(target=self.image_processor.run, name="task-publisher")
             task_thread.start()
             task_thread.join()
+
+            # Check if 14 minutes have passed
+            elapsed_time = time.time() - start_time
+            if elapsed_time >= 840:
+                self.stop_processing = True  # Set the flag to stop processing
+                break  # Exit the loop to stop processing immediately
 
     def run(self):
         # Publisher
