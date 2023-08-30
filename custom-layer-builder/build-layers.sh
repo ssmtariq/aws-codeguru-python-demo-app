@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# This script builds AWS lambda layers that contain the scikit-learn and joblib
-# dependency for arbitrary versions of Python and scikit-learn. By default, it
-# builds for Python 3.6 - 3.8 and scikit-learn versions 0.22+, and publishes to
+# This script builds AWS lambda layers that contain the scikit-image and joblib
+# dependency for arbitrary versions of Python and scikit-image. By default, it
+# builds for Python 3.6 - 3.8 and scikit-image versions 0.22+, and publishes to
 # all US regions. The dependency size is optimized by removing some unnecessary
 # files from site-packages (__pycache__, *.pyc, tests...).
 #
@@ -12,9 +12,9 @@
 # Python versions and publish to all US regions.
 #  ./build-layers.sh
 #
-# Example 2: Build lambda layer for Python 3.7 and scikit-learn 0.23.0, publish
-# to us-west-2.
-#  ./build-layers.sh --python=3.7 --scikit-learn==0.23.0 --region=us-west-2
+# Example 2: Build lambda layer for Python 3.8 and scikit-image 0.23.0, publish
+# to us-east-2.
+#  ./build-layers.sh --python=3.8 --scikit-image==0.21.0 --region=us-east-2
 
 set -e
 set -o pipefail
@@ -27,7 +27,7 @@ for arg in "$@"
 do
     case $arg in
         --python=*) declare -a PYTHON_VERSIONS=("${arg#*=}") shift;;
-        --scikit-learn=*) declare -a SKLEARN_VERSIONS=("${arg#*=}") shift;;
+        --scikit-image=*) declare -a SKIMAGE_VERSIONS=("${arg#*=}") shift;;
         --region=*) declare -a REGIONS=("${arg#*=}") shift;;
         --output-csv=*) declare OUTPUT_CSV="${arg#*=}" shift;;
         --public) declare PUBLIC=true shift;;
@@ -46,11 +46,11 @@ if [ -f ${OUTPUT_CSV} ]; then
 fi
 OUTPUT_CSV=$(realpath ${OUTPUT_CSV})
 
-if [ -z "$SKLEARN_VERSIONS" ]
+if [ -z "$SKIMAGE_VERSIONS" ]
 then
-    declare -a SKLEARN_VERSIONS=("0.22.0" "0.22.1" "0.22.2.post1" "0.23.0" "0.23.1")
+    declare -a SKIMAGE_VERSIONS=("0.22.0" "0.22.1" "0.22.2.post1" "0.23.0" "0.23.1")
 fi
-echo "Using scikit-learn version(s) $SKLEARN_VERSIONS"
+echo "Using scikit-image version(s) $SKIMAGE_VERSIONS"
 
 if [ -z "$PYTHON_VERSIONS" ]
 then
@@ -66,20 +66,20 @@ echo "Publishing to region(s) $REGIONS"
 
 mkdir -p ${BUILD_CACHE_DIR}
 rm -rf ${BUILD_CACHE_DIR}/*
-echo "Python version,scikit-learn version,region,arn" > "${OUTPUT_CSV}"
+echo "Python version,scikit-image version,region,arn" > "${OUTPUT_CSV}"
 
-for s in "${SKLEARN_VERSIONS[@]}"
+for s in "${SKIMAGE_VERSIONS[@]}"
 do
     for p in "${PYTHON_VERSIONS[@]}"
     do
-        echo "Building layer for python $p and scikit-learn $s..."
+        echo "Building layer for python $p and scikit-image $s..."
         docker run \
             -v ${SCRIPT_DIR}:/var/task \
             "lambci/lambda:build-python$p" \
-            /var/task/install-pip-packages.sh "scikit-learn==${s} joblib" /var/task/build/python/lib/python${p}/site-packages
+            /var/task/install-pip-packages.sh "scikit-image==${s} joblib" /var/task/build/python/lib/python${p}/site-packages
 
-        layer_name=$(echo "python-${p}-scikit-learn-${s}" | tr '.' '-')
-        zip_name="scikit-learn-${sklearn_version}.zip"
+        layer_name=$(echo "python-${p}-scikit-image-${s}" | tr '.' '-')
+        zip_name="scikit-image-${skimage_version}.zip"
         cd ${BUILD_CACHE_DIR} && zip -r9 ${zip_name} python && cd ..
 
         for r in "${REGIONS[@]}";
