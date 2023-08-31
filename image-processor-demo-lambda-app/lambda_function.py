@@ -1,3 +1,5 @@
+import sys
+sys.path.append("/mnt/access/python")
 import os
 import threading
 import time
@@ -26,13 +28,36 @@ def _get_environment_variable(key, example_value):
     return value
 
 
-def delete_file(file_path):
+def print_tmp_files():
+    tmp_directory = '/tmp'
+
     try:
-        print("Removing file from " + file_path)
-        os.remove(file_path)
-        print("Successfully removed file from " + file_path)
-    except Exception:
-        print("Failed to remove file from" + file_path)
+        # List all files in the /tmp directory
+        files = os.listdir(tmp_directory)
+
+        if files:
+            print("Files in /tmp directory:")
+            for file in files:
+                print(os.path.join(tmp_directory, file))
+        else:
+            print("No files found in /tmp directory.")
+    except Exception as e:
+        print("Error:", str(e))
+        print("Failed to list files in /tmp directory.")
+
+
+def delete_file(file_path):
+    print("file_path=", file_path)
+    # print_tmp_files()
+    # Construct the full file path inside /tmp directory
+    tmp_file_path = os.path.join('/tmp', file_path)
+    try:
+        print("Removing file from " + tmp_file_path)
+        os.remove(tmp_file_path)
+        print("Successfully removed file from " + tmp_file_path)
+    except Exception as e:
+        print("Error:", str(e))
+        print("Failed to remove file from" + tmp_file_path)
 
 
 class ImageEditor:
@@ -78,12 +103,15 @@ class ImageProcessor:
         return key.split("/")[-1]
 
     def _download_image(self, image_key, file_path):
+        # Construct the full file path inside /tmp directory
+        tmp_file_path = os.path.join('/tmp', file_path)
         try:
-            print("Downloading " + image_key + " to " + file_path)
-            self.s3_client.download_file(Bucket=self.s3_bucket_name, Key=image_key, Filename=file_path)
-            print("Downloaded " + image_key + " to " + file_path + " successfully")
-        except Exception:
-            print("Failed to download image " + image_key + " to " + file_path)
+            print("Downloading " + image_key + " to " + tmp_file_path)
+            self.s3_client.download_file(Bucket=self.s3_bucket_name, Key=image_key, Filename=tmp_file_path)
+            print("Downloaded " + image_key + " to " + tmp_file_path + " successfully")
+        except Exception as e:
+            print("Failed to download image " + image_key + " to " + tmp_file_path)
+            print("Error:", str(e))
             raise
 
     class BWImageProcessor:
@@ -101,18 +129,28 @@ class ImageProcessor:
                 print("Failed to upload file " + filename + " into " + bucket + " with key: " + key)
 
         def monochrome_and_upload(self, source_image):
+            print("inside monochrome and upload")
             image_name = source_image.split(".")[-2]
+            print("image_name=", image_name)
             target_file_path = source_image + "-monochrome.png"
+            print("target_file_path=", target_file_path)
+            # Construct the full file path inside /tmp directory
+            tmp_target_file_path = os.path.join('/tmp', target_file_path)
 
             try:
-                ImageEditor.monochrome(source_image, target_file_path)
-                self._upload_file(target_file_path, self.s3_bucket_name,
+                print("source_image=", source_image)
+                # Construct the full file path inside /tmp directory
+                tmp_source_image = os.path.join('/tmp', source_image)
+                ImageEditor.monochrome(tmp_source_image, tmp_target_file_path)
+                print("Calling upload")
+                self._upload_file(tmp_target_file_path, self.s3_bucket_name,
                                   BW_FOLDER + image_name + "-monochrome-" + str(
                                       int(round(time.time() * 1000))) + ".png")
-            except Exception:
+            except Exception as e:
+                print("Error in monochrome_and_upload:", str(e))
                 raise
             finally:
-                delete_file(target_file_path)
+                delete_file(tmp_target_file_path)
 
     class BrightenImageProcessor:
         def __init__(self, s3_client, sqs_queue_url, s3_bucket_name):
@@ -129,17 +167,22 @@ class ImageProcessor:
                 print("Failed to upload file " + filename + " into " + bucket + " with key: " + key)
 
         def brighten_and_upload(self, source_image):
+            print("inside brighten and upload")
             image_name = source_image.split(".")[-2]
             target_file_path = source_image + "-bright.png"
+            # Construct the full file path inside /tmp directory
+            tmp_target_file_path = os.path.join('/tmp', target_file_path)
 
             try:
-                ImageEditor.brighten_image(source_image, target_file_path)
-                self._upload_file(target_file_path, self.s3_bucket_name,
+                # Construct the full file path inside /tmp directory
+                tmp_source_image = os.path.join('/tmp', source_image)
+                ImageEditor.brighten_image(tmp_source_image, tmp_target_file_path)
+                self._upload_file(tmp_target_file_path, self.s3_bucket_name,
                                   BW_FOLDER + image_name + "-bright-" + str(int(round(time.time() * 1000))) + ".png")
             except Exception:
                 raise
             finally:
-                delete_file(target_file_path)
+                delete_file(tmp_target_file_path)
 
     def run(self):
         try:
@@ -156,6 +199,7 @@ class ImageProcessor:
                 self._download_image(image_key, temp_image_path + "." + image_file_suffix)
                 self.bw_image_processor.monochrome_and_upload(temp_image_path + "." + image_file_suffix)
                 self.brighten_image_processor.brighten_and_upload(temp_image_path + "." + image_file_suffix)
+                print("Calling delete from ImageProcessor.run()")
                 delete_file(temp_image_path + "." + image_file_suffix)
         except Exception as e:
             print("Failed to process message from SQS queue...")
@@ -173,6 +217,7 @@ class TaskPublisher:
         try:
             print("Listing image in " + self.s3_bucket_name + " under " + SAMPLE_IMAGES_FOLDER)
             response = self.s3_client.list_objects_v2(Bucket=self.s3_bucket_name, Prefix=SAMPLE_IMAGES_FOLDER)
+            print("response=",response)
 
             objects_in_s3 = list(map(lambda x: x["Key"], response["Contents"]))
             print("Listed image in " + self.s3_bucket_name + " under " + SAMPLE_IMAGES_FOLDER + " successfully.")
@@ -193,6 +238,8 @@ class TaskPublisher:
 
     def _send_sqs_message(self, message):
         try:
+            print("sqs_queue_url=",self.sqs_queue_url)
+            print("message=", message)
             self.sqs_client.send_message(
                 QueueUrl=self.sqs_queue_url,
                 MessageBody=message
@@ -221,50 +268,47 @@ class SampleDemoApp:
         self.image_processor = ImageProcessor(self.sqs_queue_url, self.s3_bucket_name)
 
     def _publish_task(self):
+        print("inside _publish_task")
         self.stop_processing = False
         start_time = time.time()  # Start time of the task_publisher thread
         """
-        Setup a thread to publish 10 image transform task every 10 seconds
+        Publish image transform task every 10 seconds
         """
         while not self.stop_processing:
-            task_thread = threading.Thread(target=self.task_publisher.publish_image_transform_task,
-                                           name="task-publisher")
-            task_thread.start()
-            task_thread.join()
+            print("inside the loop")
+            self.task_publisher.publish_image_transform_task()
+
             time.sleep(10)
 
             # Check if 14 minutes have passed
             elapsed_time = time.time() - start_time
-            if elapsed_time >= 840:
+            if elapsed_time >= 10:
                 self.stop_processing = True  # Set the flag to stop processing
                 break  # Exit the loop to stop processing immediately
 
     def _process_message(self):
+        print("inside _process_message")
         self.stop_processing = False
         start_time = time.time()  # Start time of the image_processor thread
         """
-        Setup a thread to process message
+        Process messages
         """
         while not self.stop_processing:
-            task_thread = threading.Thread(target=self.image_processor.run, name="task-publisher")
-            task_thread.start()
-            task_thread.join()
+            print("inside the loop")
+            self.image_processor.run()
 
             # Check if 14 minutes have passed
             elapsed_time = time.time() - start_time
-            if elapsed_time >= 840:
+            if elapsed_time >= 10:
                 self.stop_processing = True  # Set the flag to stop processing
                 break  # Exit the loop to stop processing immediately
 
     def run(self):
         # Publisher
-        task_publisher_thread = threading.Thread(target=self._publish_task, name="task_publisher_scheduler")
-        task_publisher_thread.start()
+        self._publish_task()
 
         # Listener
-        task_processor_thread = threading.Thread(target=self._process_message(), name="task_processor_thread")
-        task_processor_thread.start()
-
+        self._process_message()
 
 
 def lambda_handler(event, context):
