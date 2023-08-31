@@ -268,47 +268,49 @@ class SampleDemoApp:
         self.image_processor = ImageProcessor(self.sqs_queue_url, self.s3_bucket_name)
 
     def _publish_task(self):
-        print("inside _publish_task")
         self.stop_processing = False
         start_time = time.time()  # Start time of the task_publisher thread
         """
-        Publish image transform task every 10 seconds
+        Setup a thread to publish 10 image transform task every 10 seconds
         """
         while not self.stop_processing:
-            print("inside the loop")
-            self.task_publisher.publish_image_transform_task()
-
+            task_thread = threading.Thread(target=self.task_publisher.publish_image_transform_task,
+                                           name="task-publisher")
+            task_thread.start()
+            task_thread.join()
             time.sleep(10)
 
             # Check if 14 minutes have passed
             elapsed_time = time.time() - start_time
-            if elapsed_time >= 10:
+            if elapsed_time >= 840:
                 self.stop_processing = True  # Set the flag to stop processing
                 break  # Exit the loop to stop processing immediately
 
     def _process_message(self):
-        print("inside _process_message")
         self.stop_processing = False
         start_time = time.time()  # Start time of the image_processor thread
         """
-        Process messages
+        Setup a thread to process message
         """
         while not self.stop_processing:
-            print("inside the loop")
-            self.image_processor.run()
+            task_thread = threading.Thread(target=self.image_processor.run, name="task-publisher")
+            task_thread.start()
+            task_thread.join()
 
             # Check if 14 minutes have passed
             elapsed_time = time.time() - start_time
-            if elapsed_time >= 10:
+            if elapsed_time >= 840:
                 self.stop_processing = True  # Set the flag to stop processing
                 break  # Exit the loop to stop processing immediately
 
     def run(self):
         # Publisher
-        self._publish_task()
+        task_publisher_thread = threading.Thread(target=self._publish_task, name="task_publisher_scheduler")
+        task_publisher_thread.start()
 
         # Listener
-        self._process_message()
+        task_processor_thread = threading.Thread(target=self._process_message(), name="task_processor_thread")
+        task_processor_thread.start()
 
 
 def lambda_handler(event, context):
