@@ -1,17 +1,23 @@
-import sys
-sys.path.append("/mnt/access/python")
 import os
 import threading
 import time
 import boto3
 import random
+import logging
+import sys
+
+sys.path.append("/mnt/access/python")
 
 from skimage import io, exposure
 from skimage import img_as_ubyte
 from skimage.color import rgb2gray, rgba2rgb
 
-DEMO_APP_SQS_URL = os.environ['DEMO_APP_SQS_URL'] # "https://sqs.REGION.amazonaws.com/ACCOUNT_ID/DemoApplicationQueueLambdaOriginal"
-DEMO_APP_BUCKET_NAME = os.environ['DEMO_APP_BUCKET_NAME'] #"python-lambda-imageprocessor-demo-app-test-bucket-original"
+logging.getLogger('botocore').setLevel(logging.DEBUG)
+
+DEMO_APP_SQS_URL = os.environ[
+    'DEMO_APP_SQS_URL']  # "https://sqs.REGION.amazonaws.com/ACCOUNT_ID/DemoApplicationQueueLambdaOriginal"
+DEMO_APP_BUCKET_NAME = os.environ[
+    'DEMO_APP_BUCKET_NAME']  # "python-lambda-imageprocessor-demo-app-test-bucket-original"
 
 BW_FOLDER = "bw-images/"
 BRIGHTEN_FOLDER = "brighten-images/"
@@ -20,6 +26,7 @@ SAMPLE_IMAGES_FOLDER = "input-images/"
 EXAMPLE_IMAGE_LOCAL_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "resources", "example-image.png"
 )
+
 
 def _get_environment_variable(key, example_value):
     value = os.getenv(key)
@@ -47,7 +54,7 @@ def print_tmp_files():
 
 
 def delete_file(file_path):
-    print("file_path=", file_path)
+    # print("file_path=", file_path)
     # print_tmp_files()
     # Construct the full file path inside /tmp directory
     tmp_file_path = os.path.join('/tmp', file_path)
@@ -129,20 +136,20 @@ class ImageProcessor:
                 print("Failed to upload file " + filename + " into " + bucket + " with key: " + key)
 
         def monochrome_and_upload(self, source_image):
-            print("inside monochrome and upload")
+            # print("inside monochrome and upload")
             image_name = source_image.split(".")[-2]
-            print("image_name=", image_name)
+            # print("image_name=", image_name)
             target_file_path = source_image + "-monochrome.png"
-            print("target_file_path=", target_file_path)
+            # print("target_file_path=", target_file_path)
             # Construct the full file path inside /tmp directory
             tmp_target_file_path = os.path.join('/tmp', target_file_path)
 
             try:
-                print("source_image=", source_image)
+                # print("source_image=", source_image)
                 # Construct the full file path inside /tmp directory
                 tmp_source_image = os.path.join('/tmp', source_image)
                 ImageEditor.monochrome(tmp_source_image, tmp_target_file_path)
-                print("Calling upload")
+                # print("Calling upload")
                 self._upload_file(tmp_target_file_path, self.s3_bucket_name,
                                   BW_FOLDER + image_name + "-monochrome-" + str(
                                       int(round(time.time() * 1000))) + ".png")
@@ -167,7 +174,7 @@ class ImageProcessor:
                 print("Failed to upload file " + filename + " into " + bucket + " with key: " + key)
 
         def brighten_and_upload(self, source_image):
-            print("inside brighten and upload")
+            # print("inside brighten and upload")
             image_name = source_image.split(".")[-2]
             target_file_path = source_image + "-bright.png"
             # Construct the full file path inside /tmp directory
@@ -192,14 +199,14 @@ class ImageProcessor:
 
             for image_key in messages:
                 image_name = self._get_name_from_key(image_key)
-                print("Image name: " + image_name)
+                # print("Image name: " + image_name)
                 image_name_without_file_suffix = image_name.split(".")[-2]
                 image_file_suffix = image_name.split(".")[-1]
                 temp_image_path = image_name_without_file_suffix + "-" + str(random.randrange(100000))
                 self._download_image(image_key, temp_image_path + "." + image_file_suffix)
                 self.bw_image_processor.monochrome_and_upload(temp_image_path + "." + image_file_suffix)
                 self.brighten_image_processor.brighten_and_upload(temp_image_path + "." + image_file_suffix)
-                print("Calling delete from ImageProcessor.run()")
+                # print("Calling delete from ImageProcessor.run()")
                 delete_file(temp_image_path + "." + image_file_suffix)
         except Exception as e:
             print("Failed to process message from SQS queue...")
@@ -217,7 +224,7 @@ class TaskPublisher:
         try:
             print("Listing image in " + self.s3_bucket_name + " under " + SAMPLE_IMAGES_FOLDER)
             response = self.s3_client.list_objects_v2(Bucket=self.s3_bucket_name, Prefix=SAMPLE_IMAGES_FOLDER)
-            print("response=",response)
+            print("response=", response)
 
             objects_in_s3 = list(map(lambda x: x["Key"], response["Contents"]))
             print("Listed image in " + self.s3_bucket_name + " under " + SAMPLE_IMAGES_FOLDER + " successfully.")
@@ -238,7 +245,7 @@ class TaskPublisher:
 
     def _send_sqs_message(self, message):
         try:
-            print("sqs_queue_url=",self.sqs_queue_url)
+            print("sqs_queue_url=", self.sqs_queue_url)
             print("message=", message)
             self.sqs_client.send_message(
                 QueueUrl=self.sqs_queue_url,
@@ -256,7 +263,7 @@ class TaskPublisher:
 
         print("Start publishing task onto sqs...")
         for i in range(num_of_tasks):
-            lucky_number = random.randint(0, len(images)-1)
+            lucky_number = random.randint(0, len(images) - 1)
             self._send_sqs_message(str(images[lucky_number]))
 
 
