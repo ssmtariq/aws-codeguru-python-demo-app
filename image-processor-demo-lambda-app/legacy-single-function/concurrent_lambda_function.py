@@ -20,7 +20,7 @@ BRIGHTEN_FOLDER = "brighten-images/"
 
 SAMPLE_IMAGES_FOLDER = "input-images/"
 EXAMPLE_IMAGE_LOCAL_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "resources", "example-image.png"
+    os.path.dirname(os.path.abspath(__file__)), "../..", "resources", "example-image.png"
 )
 
 def _get_environment_variable(key, example_value):

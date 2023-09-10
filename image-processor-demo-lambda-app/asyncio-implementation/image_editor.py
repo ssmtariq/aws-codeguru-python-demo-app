@@ -1,6 +1,3 @@
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-
 from skimage import io, exposure
 from skimage import img_as_ubyte
 from skimage.color import rgb2gray, rgba2rgb

@@ -1,14 +1,8 @@
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-
-import os
 import boto3
 import random
 
 SAMPLE_IMAGES_FOLDER = "input-images/"
-EXAMPLE_IMAGE_LOCAL_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "resources", "example-image.png"
-)
+
 
 
 class TaskPublisher:
@@ -31,15 +25,6 @@ class TaskPublisher:
             print("Failed to list images in " + self.s3_bucket_name + " under " + SAMPLE_IMAGES_FOLDER)
             return []
 
-    def _upload_images_onto_s3(self):
-        try:
-            print("Uploading example image onto S3")
-            self.s3_client.upload_file(Filename=EXAMPLE_IMAGE_LOCAL_PATH, Bucket=self.s3_bucket_name,
-                                       Key=SAMPLE_IMAGES_FOLDER + "example-image.png")
-            print("Successfully uploaded example image onto S3")
-        except Exception:
-            print("Failed to upload example image onto S3")
-            raise
 
     def _send_sqs_message(self, message):
         try:
@@ -55,6 +40,8 @@ class TaskPublisher:
 
     def publish_image_transform_task(self, num_of_tasks=10):
         images = self._list_image_on_s3()
+        print("length of images = ", len(images))
+        print("images = ", images)
         if len(images) == 0:
             print("No images in bucket.")
             return
