@@ -70,12 +70,18 @@ class ImageProcessor:
     def _get_name_from_key(key):
         return key.split("/")[-1]
 
-    def _download_image(self, image_key, file_path):
-        # Construct the full file path inside /tmp directory
+    async def _download_image(self, image_key, file_path):
         tmp_file_path = os.path.join('/tmp', file_path)
         try:
             print("Downloading " + image_key + " to " + tmp_file_path)
-            self.s3_client.download_file(Bucket=self.s3_bucket_name, Key=image_key, Filename=tmp_file_path)
+            await asyncio.get_event_loop().run_in_executor(
+                None,  # Use the default executor
+                lambda: self.s3_client.download_file(
+                    Bucket=self.s3_bucket_name,
+                    Key=image_key,
+                    Filename=tmp_file_path
+                )
+            )
             print("Downloaded " + image_key + " to " + tmp_file_path + " successfully")
         except Exception as e:
             print("Failed to download image " + image_key + " to " + tmp_file_path)
@@ -88,15 +94,20 @@ class ImageProcessor:
             self.sqs_queue_url = sqs_queue_url
             self.s3_bucket_name = s3_bucket_name
 
-        def _upload_file(self, filename, bucket, key):
+        async def _upload_file(self, filename, bucket, key):
             try:
                 print("Uploading file " + filename + " into " + bucket + " with key: " + key)
-                self.s3_client.upload_file(filename, bucket, key)
+                await asyncio.get_event_loop().run_in_executor(
+                    None,  # Use the default executor
+                    lambda: self.s3_client.upload_file(filename, bucket, key)
+                )
+                # self.s3_client.upload_file(filename, bucket, key)
                 print("Uploaded file " + filename + " into " + bucket + " with key: " + key + " successfully")
-            except Exception:
+            except Exception as e:
                 print("Failed to upload file " + filename + " into " + bucket + " with key: " + key)
+                print(e)
 
-        def monochrome_and_upload(self, source_image):
+        async def monochrome_and_upload(self, source_image):
             # print("inside monochrome and upload")
             image_name = source_image.split(".")[-2]
             # print("image_name=", image_name)
@@ -111,9 +122,9 @@ class ImageProcessor:
                 tmp_source_image = os.path.join('/tmp', source_image)
                 ImageEditor.monochrome(tmp_source_image, tmp_target_file_path)
                 # print("Calling upload")
-                self._upload_file(tmp_target_file_path, self.s3_bucket_name,
-                                  BW_FOLDER + image_name + "-monochrome-" + str(
-                                      int(round(time.time() * 1000))) + ".png")
+                await self._upload_file(tmp_target_file_path, self.s3_bucket_name,
+                                        BW_FOLDER + image_name + "-monochrome-" + str(
+                                            int(round(time.time() * 1000))) + ".png")
             except Exception as e:
                 print("Error in monochrome_and_upload:", str(e))
                 raise
@@ -126,15 +137,20 @@ class ImageProcessor:
             self.sqs_queue_url = sqs_queue_url
             self.s3_bucket_name = s3_bucket_name
 
-        def _upload_file(self, filename, bucket, key):
+        async def _upload_file(self, filename, bucket, key):
             try:
                 print("Uploading file " + filename + " into " + bucket + " with key: " + key)
-                self.s3_client.upload_file(filename, bucket, key)
+                await asyncio.get_event_loop().run_in_executor(
+                    None,  # Use the default executor
+                    lambda: self.s3_client.upload_file(filename, bucket, key)
+                )
+                # self.s3_client.upload_file(filename, bucket, key)
                 print("Uploaded file " + filename + " into " + bucket + " with key: " + key + " successfully")
-            except Exception:
+            except Exception as e:
                 print("Failed to upload file " + filename + " into " + bucket + " with key: " + key)
+                print(e)
 
-        def brighten_and_upload(self, source_image):
+        async def brighten_and_upload(self, source_image):
             # print("inside brighten and upload")
             image_name = source_image.split(".")[-2]
             target_file_path = source_image + "-bright.png"
@@ -145,43 +161,47 @@ class ImageProcessor:
                 # Construct the full file path inside /tmp directory
                 tmp_source_image = os.path.join('/tmp', source_image)
                 ImageEditor.brighten_image(tmp_source_image, tmp_target_file_path)
-                self._upload_file(tmp_target_file_path, self.s3_bucket_name,
-                                  BW_FOLDER + image_name + "-bright-" + str(int(round(time.time() * 1000))) + ".png")
+                await self._upload_file(tmp_target_file_path, self.s3_bucket_name,
+                                        BW_FOLDER + image_name + "-bright-" + str(
+                                            int(round(time.time() * 1000))) + ".png")
             except Exception:
                 raise
             finally:
                 delete_file(tmp_target_file_path)
 
     async def process_image(self, image_key):
-        image_name = self._get_name_from_key(image_key)
-        image_name_without_file_suffix = image_name.split(".")[-2]
-        image_file_suffix = image_name.split(".")[-1]
-        temp_image_path = image_name_without_file_suffix + "-" + str(random.randrange(100000))
+        try:
+            image_name = self._get_name_from_key(image_key)
+            image_name_without_file_suffix = image_name.split(".")[-2]
+            image_file_suffix = image_name.split(".")[-1]
+            temp_image_path = image_name_without_file_suffix + "-" + str(random.randrange(100000))
 
-        self._download_image(image_key, temp_image_path + "." + image_file_suffix)
+            await self._download_image(image_key, temp_image_path + "." + image_file_suffix)
 
-        tasks = [
-            self.bw_image_processor.monochrome_and_upload(temp_image_path + "." + image_file_suffix),
-            self.brighten_image_processor.brighten_and_upload(temp_image_path + "." + image_file_suffix)
-        ]
+            tasks = [
+                self.bw_image_processor.monochrome_and_upload(temp_image_path + "." + image_file_suffix),
+                self.brighten_image_processor.brighten_and_upload(temp_image_path + "." + image_file_suffix)
+            ]
 
-        await asyncio.gather(*tasks)
-        delete_file(temp_image_path + "." + image_file_suffix)
+            await asyncio.gather(*tasks)
+            delete_file(temp_image_path + "." + image_file_suffix)
+        except Exception as e:
+            print("Failed to process images sent from process_messages...")
+            print(e)
 
-    def run(self):
+    async def process_messages(self):
         try:
             messages = self._extract_tasks()
             print("Number of messages extracted from SQS: ", len(messages))
             if len(messages) == 0:
                 return
 
-            # Create an event loop
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
             # Process messages concurrently
-            loop.run_until_complete(asyncio.gather(*[self.process_image(image_key) for image_key in messages]))
+            await asyncio.gather(*[self.process_image(image_key) for image_key in messages])
 
         except Exception as e:
-            print("Failed to process message from SQS queue...")
+            print("Failed to process messages from SQS queue...")
             print(e)
+
+    def run(self):
+        asyncio.run(self.process_messages())
