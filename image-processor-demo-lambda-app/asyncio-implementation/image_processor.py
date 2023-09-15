@@ -62,8 +62,9 @@ class ImageProcessor:
             messages = list(map(lambda x: x["Body"], response["Messages"]))
             print("Extracted tasks from sqs queue successfully")
             return messages
-        except Exception:
+        except Exception as e:
             print("Failed to extract task from sqs queue - " + str(self.sqs_queue_url))
+            print("Error in _extract_tasks():", str(e))
             raise
 
     @staticmethod
@@ -120,8 +121,7 @@ class ImageProcessor:
                 # print("source_image=", source_image)
                 # Construct the full file path inside /tmp directory
                 tmp_source_image = os.path.join('/tmp', source_image)
-                ImageEditor.monochrome(tmp_source_image, tmp_target_file_path)
-                # print("Calling upload")
+                await ImageEditor.monochrome(tmp_source_image, tmp_target_file_path)
                 await self._upload_file(tmp_target_file_path, self.s3_bucket_name,
                                         BW_FOLDER + image_name + "-monochrome-" + str(
                                             int(round(time.time() * 1000))) + ".png")
@@ -160,11 +160,12 @@ class ImageProcessor:
             try:
                 # Construct the full file path inside /tmp directory
                 tmp_source_image = os.path.join('/tmp', source_image)
-                ImageEditor.brighten_image(tmp_source_image, tmp_target_file_path)
+                await ImageEditor.brighten_image(tmp_source_image, tmp_target_file_path)
                 await self._upload_file(tmp_target_file_path, self.s3_bucket_name,
                                         BW_FOLDER + image_name + "-bright-" + str(
                                             int(round(time.time() * 1000))) + ".png")
-            except Exception:
+            except Exception as e:
+                print("Error in brighten_and_upload():", str(e))
                 raise
             finally:
                 delete_file(tmp_target_file_path)
